@@ -1,4 +1,5 @@
 import { SiteShell } from "@/components/site-shell";
+import type { Database } from "@/lib/database.types";
 import { createClient } from "@/lib/supabase/server";
 import { formatPeso, formatPoints } from "@/lib/utils";
 
@@ -7,6 +8,8 @@ type RangeStats = {
   purchase: number;
   points: number;
 };
+
+type LeaderboardEntry = Database["public"]["Views"]["leaderboard"]["Row"];
 
 function getPeriodTotals(rows: { created_at: string; amount_spent: number; points_awarded: number }[]): RangeStats[] {
   const now = new Date();
@@ -38,16 +41,17 @@ function getPeriodTotals(rows: { created_at: string; amount_spent: number; point
 export default async function AdminDashboardPage() {
   const supabase = await createClient();
 
-  const [{ data: transactions }, { data: leaderboard }] = await Promise.all([
+  const [{ data: transactions }, { data: leaderboardData }] = await Promise.all([
     supabase
       .from("point_transactions")
       .select("created_at, amount_spent, points_awarded")
       .order("created_at", { ascending: false })
       .limit(500),
-    supabase.from("leaderboard").select("*").limit(10)
+    supabase.from("leaderboard").select("rank_number, full_name, username, total_points").limit(10)
   ]);
 
   const stats = getPeriodTotals(transactions ?? []);
+  const leaderboard: LeaderboardEntry[] = leaderboardData ?? [];
 
   return (
     <SiteShell
@@ -90,7 +94,7 @@ export default async function AdminDashboardPage() {
               </thead>
               <tbody>
                 {leaderboard?.map((entry) => (
-                  <tr key={entry.username}>
+                  <tr key={entry.username ?? `${entry.rank_number ?? 0}`}>
                     <td>#{entry.rank_number}</td>
                     <td>{entry.full_name}</td>
                     <td>@{entry.username}</td>

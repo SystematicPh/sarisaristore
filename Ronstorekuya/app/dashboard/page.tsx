@@ -1,6 +1,9 @@
 import { SiteShell } from "@/components/site-shell";
+import type { Database } from "@/lib/database.types";
 import { createClient } from "@/lib/supabase/server";
 import { formatDate, formatPeso, formatPoints } from "@/lib/utils";
+
+type LeaderboardEntry = Database["public"]["Views"]["leaderboard"]["Row"];
 
 export default async function DashboardPage() {
   const supabase = await createClient();
@@ -8,9 +11,9 @@ export default async function DashboardPage() {
     data: { user }
   } = await supabase.auth.getUser();
 
-  const [{ data: profile }, { data: leaderboard }, { data: transactions }, { data: rewards }] = await Promise.all([
+  const [{ data: profile }, { data: leaderboardData }, { data: transactions }, { data: rewards }] = await Promise.all([
     supabase.from("profiles").select("full_name, total_points").eq("id", user!.id).single(),
-    supabase.from("leaderboard").select("*").limit(8),
+    supabase.from("leaderboard").select("rank_number, full_name, username, total_points").limit(8),
     supabase
       .from("point_transactions")
       .select("id, amount_spent, points_awarded, created_at, notes")
@@ -19,6 +22,8 @@ export default async function DashboardPage() {
       .limit(5),
     supabase.from("rewards").select("id, title, points_cost, is_active").eq("is_active", true).limit(3)
   ]);
+
+  const leaderboard: LeaderboardEntry[] = leaderboardData ?? [];
 
   return (
     <SiteShell
@@ -88,7 +93,7 @@ export default async function DashboardPage() {
           <h2>Top customers</h2>
           <div className="stack">
             {leaderboard?.map((entry) => (
-              <div key={entry.username} className="sidebar-card">
+              <div key={entry.username ?? `${entry.rank_number ?? 0}`} className="sidebar-card">
                 <strong>
                   #{entry.rank_number} {entry.full_name}
                 </strong>
